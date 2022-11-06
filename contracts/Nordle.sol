@@ -47,7 +47,7 @@ contract Nordle is
     uint256 private feeAnyApi;
 
     /// @dev NFT Token ID counter
-    uint256 private tokenIdCount;
+    uint256 public tokenIdCount;
 
     /// @dev Words (phrase) associated with each token
     mapping(uint256 => string) public tokenWords;
@@ -139,12 +139,12 @@ contract Nordle is
     {
         newWord = "";
 
-        // Make note of token Ids used to create the new, combined token
+        // TODO: Make note of token Ids used to create the new, combined token
         // These Ids will be burned
         for (uint256 i = 0; i < _tokensToCombine.length; i++) {
             uint256 tokenId = _tokensToCombine[i];
             require(ownerOf(tokenId) == msg.sender, "Invalid owner of burn ID");
-            newWord = string.concat(newWord, tokenWords[tokenId], " ");
+            newWord = string.concat(newWord, tokenWords[tokenId], "%20");
         }
 
         _createWord(newWord, msg.sender);
@@ -152,7 +152,7 @@ contract Nordle is
 
     /// @dev Submits an Any API request to generate image URL
     /// and subsequently call fulfillCreateWord()
-    function _createWord(string memory _word, address owner)
+    function _createWord(string memory _word, address _owner)
         internal
         returns (uint256 apiRequestId)
     {
@@ -160,7 +160,8 @@ contract Nordle is
             _word,
             this.fulfillCreateWord.selector
         );
-        wordRequesters[apiRequestId] = owner;
+        requestWords[apiRequestId] = _word;
+        wordRequesters[apiRequestId] = _owner;
     }
 
     /// @dev Called by Chainlink after image URL is generated via the API call
