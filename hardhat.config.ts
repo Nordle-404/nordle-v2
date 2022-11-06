@@ -8,7 +8,6 @@ import "solidity-coverage"
 import "hardhat-deploy"
 import "solidity-coverage"
 import { HardhatUserConfig } from "hardhat/types"
-import "@nomicfoundation/hardhat-toolbox"
 
 const GOERLI_RPC_URL = process.env.GOERLI_RPC_URL || "https://eth-goerli"
 const PRIVATE_KEY = process.env.PRIVATE_KEY || "0xkey"
