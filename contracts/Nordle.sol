@@ -6,7 +6,8 @@ import {ConfirmedOwner} from "@chainlink/contracts/src/v0.8/ConfirmedOwner.sol";
 import {VRFCoordinatorV2Interface} from "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import {VRFConsumerBaseV2} from "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 import {ERC721, ERC721URIStorage} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
-import {ERC721Burnable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
+
+// import {ERC721Burnable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 
 /**
  * Request testnet LINK and ETH here: https://faucets.chain.link/
@@ -56,7 +57,7 @@ contract Nordle is
     mapping(uint256 => string) public requestWords;
 
     /// @dev TokenIds to be burned
-    mapping(uint256 => uint256[]) public burnTokens;
+    mapping(uint256 => uint256[]) public tokensToBurn;
 
     /// @dev Addresses of word creation requesters
     mapping(uint256 => address) public wordRequesters;
@@ -106,7 +107,8 @@ contract Nordle is
     /// @dev Initiate request to create new word NFT, and you can "buy" a word (initiate it)
     function requestCreateWord(string memory _word) public payable {
         require(msg.value == wordForcedPrice, "Invalid payment");
-        _createWord(_word, msg.sender);
+        uint256[] memory noTokensToCombine;
+        _createWord(_word, msg.sender, noTokensToCombine);
     }
 
     /// @dev Initiate request to create new word NFT
@@ -129,7 +131,9 @@ contract Nordle is
         uint256 randomIndex = _randomWords[0] % nordleWords.length;
         string memory word = nordleWords[randomIndex];
 
-        _createWord(word, wordRequesters[_vrfRequestId]);
+        uint256[] memory noTokensToCombine;
+
+        _createWord(word, wordRequesters[_vrfRequestId], noTokensToCombine);
         delete wordRequesters[_vrfRequestId];
     }
 
@@ -139,29 +143,36 @@ contract Nordle is
     {
         newWord = "";
 
-        // TODO: Make note of token Ids used to create the new, combined token
-        // These Ids will be burned
         for (uint256 i = 0; i < _tokensToCombine.length; i++) {
             uint256 tokenId = _tokensToCombine[i];
-            require(ownerOf(tokenId) == msg.sender, "Invalid owner of burn ID");
+            // Check to see if the user owns the token
+            require(ownerOf(tokenId) == msg.sender, "Invalid owner of token");
+            // Check to see if the token exists (i.e. not burned)
+            require(_exists(tokenId) == true, "Token does not exist");
             newWord = string.concat(newWord, tokenWords[tokenId], "%20");
         }
 
-        _createWord(newWord, msg.sender);
+        _createWord(newWord, msg.sender, _tokensToCombine);
     }
 
     /// @dev Submits an Any API request to generate image URL
     /// and subsequently call fulfillCreateWord()
-    function _createWord(string memory _word, address _owner)
-        internal
-        returns (uint256 apiRequestId)
-    {
+    function _createWord(
+        string memory _word,
+        address _owner,
+        uint256[] memory _tokensToCombine
+    ) internal returns (uint256 apiRequestId) {
         apiRequestId = _submitChainlinkApiRequest(
             _word,
             this.fulfillCreateWord.selector
         );
         requestWords[apiRequestId] = _word;
         wordRequesters[apiRequestId] = _owner;
+
+        // If combining tokens, make note of the Ids to burn later
+        if (_tokensToCombine.length > 0) {
+            tokensToBurn[apiRequestId] = _tokensToCombine;
+        }
     }
 
     /// @dev Called by Chainlink after image URL is generated via the API call
@@ -203,10 +214,13 @@ contract Nordle is
         delete wordRequesters[_apiRequestId];
         delete requestWords[_apiRequestId];
 
-        // TODO: implement burn
-        // if (burnTokens[_apiRequestId].length > 0) {
-        //     for (uint256 i = 0; i < burnTokens[_apiRequestId].length; i++) {}
-        // }
+        if (tokensToBurn[_apiRequestId].length > 0) {
+            for (uint256 i = 0; i < tokensToBurn[_apiRequestId].length; i++) {
+                uint256 tokenId = tokensToBurn[_apiRequestId][i];
+                _burn(tokenId);
+            }
+            delete tokensToBurn[_apiRequestId];
+        }
     }
 
     function withdraw() public onlyOwner {
