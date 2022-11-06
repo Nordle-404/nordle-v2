@@ -13,6 +13,7 @@ export const verify = async (contractAddress: string, args: any[]) => {
         if (error.message.toLowerCase().includes("already verified")) {
             console.log("Already Verified!")
         } else {
+            console.log("Verification failed!")
             console.log(error)
         }
     }

@@ -33,6 +33,17 @@ const deployNordle: DeployFunction = async function (
     await prevNordleWithdrawTx.wait(1)
     console.log("Withdrew LINK from prev Nordle!")
 
+    // Deploy NordleWordBank contract
+    console.log("Deploying NordleWordBank on ", network.name)
+
+    const NordleWordBankDeployResponse = await deploy("NordleWordBank", {
+        from: deployer,
+        log: true,
+        waitConfirmations: 3,
+    })
+
+    console.log("Deployed NordleWordBank to: ", NordleWordBankDeployResponse.address)
+
     // Deploy Nordle contract
     console.log("Deploying Nordle on ", network.name)
 
@@ -42,6 +53,7 @@ const deployNordle: DeployFunction = async function (
         VRF_COORDINATOR_ADDRESS,
         VRF_KEY_HASH,
         VRF_SUBSCRIPTION_ID,
+        NordleWordBankDeployResponse.address,
     ]
 
     const NordleDeployResponse = await deploy("Nordle", {

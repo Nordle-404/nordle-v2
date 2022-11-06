@@ -1,25 +1,19 @@
 // SPDX-License-Identifier: SEE LICENSE IN LICENSE
 pragma solidity ^0.8.12;
 
-import {Chainlink, ChainlinkClient} from "@chainlink/contracts/src/v0.8/ChainlinkClient.sol";
+import {Chainlink, ChainlinkClient, LinkTokenInterface} from "@chainlink/contracts/src/v0.8/ChainlinkClient.sol";
 import {ConfirmedOwner} from "@chainlink/contracts/src/v0.8/ConfirmedOwner.sol";
 import {VRFCoordinatorV2Interface} from "@chainlink/contracts/src/v0.8/interfaces/VRFCoordinatorV2Interface.sol";
 import {VRFConsumerBaseV2} from "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 import {ERC721, ERC721URIStorage} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
+
+import {NordleWordBank} from "./NordleWordBank.sol";
 
 /**
  * Request testnet LINK and ETH here: https://faucets.chain.link/
  * Find information on LINK Token Contracts and get the latest ETH and LINK faucets here:
  * https://docs.chain.link/docs/link-token-contracts/
  */
-
-interface LinkTokenMini {
-    function balanceOf(address owner) external view returns (uint256 balance);
-
-    function transfer(address to, uint256 value)
-        external
-        returns (bool success);
-}
 
 contract Nordle is
     ERC721URIStorage,
@@ -33,10 +27,10 @@ contract Nordle is
     VRFCoordinatorV2Interface private VRF_COORDINATOR;
 
     /// @dev Chainlink VRF Subscription ID
-    uint64 private immutable vrfSubscriptionId;
+    uint64 private vrfSubscriptionId;
 
     /// @dev Chainlink VRF Max Gas Price Key Hash
-    bytes32 private immutable vrfKeyHash;
+    bytes32 private vrfKeyHash;
 
     /// @dev Chainlink Any API Job ID
     bytes32 private jobIdAnyApi;
@@ -45,24 +39,32 @@ contract Nordle is
     uint256 private feeAnyApi;
 
     /// @dev NFT Token ID counter
-    uint256 public tokenIdCount;
+    uint256 private tokenIdCount;
+
+    /// @dev User-owned token Ids
+    mapping(address => uint256[]) private userTokenIds;
+
+    /// @dev Mapping to keep track of index of user-owned token Ids within the array
+    mapping(address => mapping(uint256 => uint256)) private userTokenIdIndex;
+
+    /// @dev User-burned token Ids
+    mapping(address => uint256[]) private userBurnedTokenIds;
 
     /// @dev Words (phrase) associated with each token
     mapping(uint256 => string) public tokenWords;
 
     /// @dev Words (phrase) for requests
-    mapping(uint256 => string) public requestWords;
+    mapping(uint256 => string) private requestWords;
 
     /// @dev TokenIds to be burned
-    mapping(uint256 => uint256[]) public tokensToBurn;
+    mapping(uint256 => uint256[]) private tokensToBurn;
 
     /// @dev Addresses of word creation requesters
-    mapping(uint256 => address) public wordRequesters;
-
-    /// @dev All possible words
-    string[] public nordleWords = ["unicorn", "outlier", "ethereum", "pepe"];
+    mapping(uint256 => address) private wordRequesters;
 
     uint256 public wordForcedPrice = 5e16; // 0.05 (18 decimals)
+
+    NordleWordBank public nordleWordBank;
 
     /**
      * @notice Initialize the link token and target oracle
@@ -82,7 +84,8 @@ contract Nordle is
         address _linkVRFCoordinator,
         bytes32 _sKeyHash,
         // bytes32 _jobIdAnyApi,
-        uint64 _vrfSubscriptionId
+        uint64 _vrfSubscriptionId,
+        address _nordleWordBank
     )
         ERC721("Nordle", "NRD")
         ConfirmedOwner(msg.sender)
@@ -99,13 +102,14 @@ contract Nordle is
         VRF_COORDINATOR = VRFCoordinatorV2Interface(_linkVRFCoordinator);
         vrfSubscriptionId = _vrfSubscriptionId;
         vrfKeyHash = _sKeyHash;
+        nordleWordBank = NordleWordBank(payable(_nordleWordBank)); // wordbank is payable
     }
 
     /// @dev Initiate request to create new word NFT, and you can "buy" a word (initiate it)
     function requestCreateWord(string memory _word) public payable {
         require(msg.value == wordForcedPrice, "Invalid payment");
-        uint256[] memory noTokensToCombine;
-        _createWord(_word, msg.sender, noTokensToCombine);
+        require(nordleWordBank.exists(_word), "Word must exist in the word bank");
+        _createWord(_word, msg.sender, new uint256[](0));
     }
 
     /// @dev Initiate request to create new word NFT
@@ -125,12 +129,9 @@ contract Nordle is
         uint256 _vrfRequestId,
         uint256[] memory _randomWords
     ) internal override {
-        uint256 randomIndex = _randomWords[0] % nordleWords.length;
-        string memory word = nordleWords[randomIndex];
-
-        uint256[] memory noTokensToCombine;
-
-        _createWord(word, wordRequesters[_vrfRequestId], noTokensToCombine);
+        string[] memory words = nordleWordBank.wordBank();
+        uint256 randomIndex = _randomWords[0] % words.length;
+        _createWord(words[randomIndex], wordRequesters[_vrfRequestId], new uint256[](0)); // last arg: no tokens to combine
         delete wordRequesters[_vrfRequestId];
     }
 
@@ -138,15 +139,14 @@ contract Nordle is
         public
         returns (string memory newWord)
     {
-        newWord = "";
+        require(ownerOf(_tokensToCombine[0]) == msg.sender);
+        newWord = tokenWords[_tokensToCombine[0]];
 
-        for (uint256 i = 0; i < _tokensToCombine.length; i++) {
+        for (uint256 i = 1; i < _tokensToCombine.length; i++) {
             uint256 tokenId = _tokensToCombine[i];
-            // Check to see if the user owns the token
-            require(ownerOf(tokenId) == msg.sender, "Invalid owner of token");
-            // Check to see if the token exists (i.e. not burned)
-            require(_exists(tokenId) == true, "Token does not exist");
-            newWord = string.concat(newWord, tokenWords[tokenId], "%20");
+            // Check to see if token exists & msg.sender owns the token
+            require(ownerOf(tokenId) == msg.sender);
+            newWord = string.concat(newWord, "%20", tokenWords[tokenId]);
         }
 
         _createWord(newWord, msg.sender, _tokensToCombine);
@@ -191,37 +191,63 @@ contract Nordle is
             address(this),
             callbackSelector
         );
-        string memory drawUrl = string.concat(
-            "https://bdd9-4-71-27-132.ngrok.io/draw?phrase=",
+        req.add("get", string.concat(
+            "https://nordle-server-ltu9g.ondigitalocean.app/draw?phrase=",
             phrase
-        );
-        req.add("get", drawUrl);
+        ));
         req.add("path", "payload,data"); // response looks like: { payload: { data: '' } }
         requestId = uint256(sendChainlinkRequest(req, feeAnyApi));
     }
 
-    function _mintWord(uint256 _apiRequestId, string memory _imageUrl)
-        internal
-    {
-        _mint(wordRequesters[_apiRequestId], tokenIdCount);
-        _setTokenURI(tokenIdCount, _imageUrl);
-        tokenWords[tokenIdCount] = requestWords[_apiRequestId];
-        tokenIdCount++;
-
-        delete wordRequesters[_apiRequestId];
-        delete requestWords[_apiRequestId];
-
+    function _mintWord(uint256 _apiRequestId, string memory _imageUrl) internal {
+        // NOTE: burn before minting, for safety
         if (tokensToBurn[_apiRequestId].length > 0) {
             for (uint256 i = 0; i < tokensToBurn[_apiRequestId].length; i++) {
                 uint256 tokenId = tokensToBurn[_apiRequestId][i];
-                _burn(tokenId);
+                _burnWord(tokenId);
             }
             delete tokensToBurn[_apiRequestId];
         }
+
+        address owner = wordRequesters[_apiRequestId];
+        _mint(owner, tokenIdCount);
+        _setTokenURI(tokenIdCount, _imageUrl);
+        tokenWords[tokenIdCount] = requestWords[_apiRequestId];
+
+        userTokenIds[owner].push(tokenIdCount);
+        userTokenIdIndex[owner][tokenIdCount] = userTokenIds[owner].length-1;
+
+        tokenIdCount++;
+        delete wordRequesters[_apiRequestId];
+        delete requestWords[_apiRequestId];
+    }
+
+    function _burnWord(uint256 tokenId) internal {
+        // Swap to-be-burned tokenId with the last tokenId in the unordered list
+        // Then burn & delete the last tokenId (which is the correct tokenId to burn)
+        address owner = ownerOf(tokenId);
+        uint index = userTokenIdIndex[owner][tokenId];
+
+        _burn(tokenId);
+        userBurnedTokenIds[owner].push(tokenId);
+
+        userTokenIds[owner][index] = userTokenIds[owner][userTokenIds[owner].length-1];
+        userTokenIdIndex[owner][userTokenIds[owner][index]] = index;
+
+        delete userTokenIds[owner][userTokenIds[owner].length-1];
+        delete userTokenIdIndex[owner][tokenId];
+    }
+
+    function getTokenIds(address user) public view returns (uint256[] memory) {
+        return userTokenIds[user];
+    }
+
+    function getBurnedTokenIds(address user) public view returns (uint256[] memory) {
+        return userBurnedTokenIds[user];
     }
 
     function withdraw() public onlyOwner {
-        LinkTokenMini link = LinkTokenMini(chainlinkTokenAddress());
+        LinkTokenInterface link = LinkTokenInterface(chainlinkTokenAddress());
         require(
             link.transfer(msg.sender, link.balanceOf(address(this))),
             "Unable to transfer"
@@ -231,4 +257,6 @@ contract Nordle is
         );
         require(sent, "Unable to transfer");
     }
+
+    receive() external payable {}
 }
