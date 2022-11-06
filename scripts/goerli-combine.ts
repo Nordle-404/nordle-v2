@@ -30,11 +30,11 @@ async function main() {
     const nordle = Nordle__factory.connect(NORDLE_CONTRACT_ADDRESS, signer)
 
     const token0: WordToken = {
-        id: 2,
+        id: 0,
     }
 
     const token1: WordToken = {
-        id: 3,
+        id: 1,
     }
 
     console.log("---Token0 Info:")

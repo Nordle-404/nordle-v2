@@ -7,8 +7,6 @@ import {VRFCoordinatorV2Interface} from "@chainlink/contracts/src/v0.8/interface
 import {VRFConsumerBaseV2} from "@chainlink/contracts/src/v0.8/VRFConsumerBaseV2.sol";
 import {ERC721, ERC721URIStorage} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721URIStorage.sol";
 
-// import {ERC721Burnable} from "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
-
 /**
  * Request testnet LINK and ETH here: https://faucets.chain.link/
  * Find information on LINK Token Contracts and get the latest ETH and LINK faucets here:
@@ -25,7 +23,6 @@ interface LinkTokenMini {
 
 contract Nordle is
     ERC721URIStorage,
-    // ERC721Burnable,
     ChainlinkClient,
     ConfirmedOwner,
     VRFConsumerBaseV2
