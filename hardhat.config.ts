@@ -8,7 +8,12 @@ import "solidity-coverage"
 import "hardhat-deploy"
 import "solidity-coverage"
 import { HardhatUserConfig } from "hardhat/types"
+import "hardhat-contract-sizer" // npx hardhat size-contracts
 
+//
+// NOTE:
+// To load the correct .env, you must run this at the root folder (where hardhat.config is located)
+//
 const GOERLI_RPC_URL = process.env.GOERLI_RPC_URL || "https://eth-goerli"
 const PRIVATE_KEY = process.env.PRIVATE_KEY || "0xkey"
 
@@ -30,6 +35,12 @@ const config: HardhatUserConfig = {
                 version: "0.8.12",
             },
         ],
+        settings: {
+            optimizer: {
+              enabled: true,
+              runs: 1000,
+            },
+        },
     },
     defaultNetwork: "hardhat",
     networks: {

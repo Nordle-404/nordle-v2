@@ -1,22 +1,8 @@
 import { NORDLE_CONTRACT_ADDRESS } from "../constants"
-import { Nordle, Nordle__factory } from "../typechain-types"
-import { config as dotenvConfig } from "dotenv"
-import { utils, providers, BigNumber, Wallet, ethers } from "ethers"
-import { resolve } from "path"
+import { Nordle__factory } from "../typechain-types"
+import { BigNumber } from "ethers"
 
-const dotenvConfigPath: string = process.env.DOTENV_CONFIG_PATH || "../.env"
-dotenvConfig({ path: resolve(__dirname, dotenvConfigPath) })
-
-const mnemonic: string | undefined = process.env.MNEMONIC
-if (!mnemonic) {
-    throw new Error("Please set your MNEMONIC in a .env file")
-}
-
-const provider = new providers.JsonRpcProvider(
-    "https://rpc.ankr.com/eth_goerli"
-)
-const wallet = Wallet.fromMnemonic(mnemonic)
-const signer = wallet.connect(provider)
+import { signer } from "./shared"
 
 const defaultServerResponseBytes =
     "0x000000000000000000000000000000000000000000000000000000000000005d68747470733a2f2f697066732e696f2f697066732f6261667962656963697a71347a77656c79786b7771327277736176687070787972637a6f646d796f6c6779716b73356b676d6267656b77357835612f35353138313934302e6a7067756e69636f726e"
