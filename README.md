@@ -1,6 +1,10 @@
 # Nordle (contracts)
 
-Nordle is a unique attempt at rethinking NFTs
+Nordle is a unique attempt at reimagining NFTs. *Mint an Nord, be a AI-powered Nerd!*
+
+Mint an Nord  using a randomly generated word that instructs DALL-E to randomly generate an associated image.
+
+Combine the Nords into a longer phrase and generate novel images with DALL-E. A "flying" Nord and "unicorn" Nord will produce a ["flying unicorn" Nord](https://bafybeifpx2uxcidm3st65446x6cc7ow2yglbdfatenq5cxlv4uimkqag5m.ipfs.w3s.link/flying_unicorn).
 
 ## Observations
 
